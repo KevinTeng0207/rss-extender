@@ -1,16 +1,39 @@
-# -*- coding: utf-8 -*-
-## 使用有问题请到github.com/ravelloh/RSS提ISSUE
-### Author: RavelloH
-#### MICENCE: MIT
-##### RSS Maker
-
 from xml.dom.minidom import parse
+import xml.etree.ElementTree as ET
 from urllib.request import urlopen
 from wget import download
 from bs4 import BeautifulSoup as bs
 import xml.dom.minidom
 import re,os
 import linecache
+
+def format_xml(xml):
+    pattern1 = re.compile(r'<description>(.*?)</description>', re.DOTALL)
+    pattern2 = re.compile(r'<title>(.*?)</title>', re.DOTALL)
+    
+    def replace_newline(match):
+        return match.group(0).replace('\n', '\\n')
+    formatted_xml = re.sub(pattern1, replace_newline, xml)
+    formatted_xml = re.sub(pattern2, replace_newline, formatted_xml)
+    return formatted_xml
+    
+def process_xml_file(file_path):
+    try:
+        tree = ET.parse(file_path)
+        root = tree.getroot()
+        xml_content = ET.tostring(root, encoding='unicode')
+        formatted_xml_content = format_xml(xml_content)
+        new_root = ET.fromstring(formatted_xml_content)
+        tree._setroot(new_root)
+        tree.write(file_path, encoding='utf-8', xml_declaration=True)
+    except Exception as e:
+        print(f"处理XML文件 {file_path} 失败：{str(e)}")
+        exit()
+
+def remove_rss_line(text):
+    lines = text.splitlines()
+    new_lines = [line for line in lines if not line.startswith("<rss>")]
+    return "\n".join(new_lines)
 
 # 替换函数
 def alter(file,old_str,new_str):
@@ -30,16 +53,19 @@ rsslink = 'https://fetchrss.com/rss/664dad050bcb52324145b903664dacf4cedf57749971
 if 'originRss.xml' in os.listdir('.'):
     os.remove('originRss.xml')
     filename = download(rsslink,'./originRss.xml')
+    process_xml_file('./originRss.xml')
     print('\n[进程0/6]原始RSS已更新')
 else:
     filename = download(rsslink,'./originRss.xml')
+    process_xml_file('./originRss.xml')
     download(rsslink,'./rss.xml')
+    process_xml_file('./rss.xml')
     l1 = []
-    with open(r"./rss.xml", 'r') as fp:
+    with open(r"./rss.xml", 'r', encoding="utf-8") as fp:
         l1 = fp.readlines()
-    with open(r"./rss.xml", 'w') as fp:
+    with open(r"./rss.xml", 'w', encoding="utf-8") as fp:
         for number, line in enumerate(l1):
-            if number not in [15,16,17,18,19,20,21]:
+            if number not in [15,16,17,18,19,20,21,22,23]:
                 fp.write(line)
     print('\n[进程0/6]初始化完毕，已构筑文件')
 
@@ -91,10 +117,11 @@ else:
 print('[进程4/6]正在合并新项目...')
 filltext = '''
 </image>
+
 <item>
 '''
 # 查找对应行
-with open(filename, 'r') as file:
+with open(filename, 'r', encoding="utf-8") as file:
     line = file.readline()
     counts = 1
     while line:
@@ -105,19 +132,19 @@ with open(filename, 'r') as file:
 # 创建插入新内容
 tofiletext = linecache.getline(filename, counts-1)+linecache.getline(filename, counts)+linecache.getline(filename, counts+1)+linecache.getline(filename, counts+2)+linecache.getline(filename, counts+3)+linecache.getline(filename, counts+4)+linecache.getline(filename, counts+5)
 file_name = "./rss.xml"
-with open(file_name, 'r') as f:
+with open(file_name, 'r', encoding="utf-8") as f:
     lines = f.readlines()
     lines.insert(15,tofiletext)
     s = ''.join(lines)
-with open(file_name, 'w') as f:
-    f.write(s)
+with open(file_name, 'w', encoding="utf-8") as f:
+    f.write(remove_rss_line(s))
 print('\n[进程4/6]新项目已合并')
 
 # 爬取博客内描述 去广告
 keyword = '<![CDATA[<br/><br/><span style="font-size:12px; color: gray;">(Feed generated with <a href="https://fetchrss.com" target="_blank">FetchRSS</a>)</span>]]>'
-totalline = len(open(file_name,'r').readlines())
+totalline = len(open(file_name,'r', encoding="utf-8").readlines())
 needs = []
-with open(file_name, 'r') as file:
+with open(file_name, 'r', encoding="utf-8") as file:
     line = file.readline()
     counts = 1
     while line:
